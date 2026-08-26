@@ -38,6 +38,15 @@ class ExpoVideoPlaybackService : MediaSessionService() {
     set(value) {
       weakContext = WeakReference(value)
     }
+
+  // The service can be created by the system (startService / BIND_AUTO_CREATE) and then
+  // stopped/destroyed before JS ever assigns `appContext` (e.g. no player was registered).
+  // In that case `weakContext` is never initialized, and dereferencing it from the teardown
+  // path (onDestroy -> cleanup -> appContext) throws UninitializedPropertyAccessException,
+  // which the system rethrows as a fatal "Unable to stop service" RuntimeException. This
+  // null-safe accessor lets teardown avoid touching an uninitialized lateinit.
+  private val appContextOrNull: AppContext?
+    get() = if (::weakContext.isInitialized) weakContext.get() else null
   private val mediaSessions = mutableMapOf<ExoPlayer, MediaSession>()
   private val binder = PlaybackServiceBinder(this)
   private var mostRecentInteractionSession: MediaSession? = null
@@ -205,7 +214,12 @@ class ExpoVideoPlaybackService : MediaSessionService() {
   }
 
   private fun cleanup() {
-    appContext.mainQueue.launch {
+    // Teardown must not depend on `appContext` being initialized (see appContextOrNull). The
+    // cleanup work below is plain Android/Media3 teardown that only needs the main thread, so
+    // run it via the app coroutine scope when available and fall back to the service's own
+    // main-thread Handler otherwise. This prevents the fatal
+    // "Unable to stop service ... lateinit property weakContext has not been initialized".
+    val work: () -> Unit = {
       stopForeground(Service.STOP_FOREGROUND_REMOVE)
       isForeground = false
 
@@ -221,6 +235,13 @@ class ExpoVideoPlaybackService : MediaSessionService() {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         notificationManager.deleteNotificationChannel(CHANNEL_ID)
       }
+    }
+
+    val mainQueue = appContextOrNull?.mainQueue
+    if (mainQueue != null) {
+      mainQueue.launch { work() }
+    } else {
+      android.os.Handler(mainLooper).post(work)
     }
   }
 

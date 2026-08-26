@@ -12,6 +12,7 @@
 
 ### 🐛 Bug fixes
 
+- [Android] Fix fatal `Unable to stop service ... lateinit property weakContext has not been initialized` crash when `ExpoVideoPlaybackService` is created by the system and stopped before JS assigns `appContext`. Teardown no longer dereferences an uninitialized `appContext`. ([#0](https://github.com/expo/expo/pull/0) by [@AndreiCalazans](https://github.com/AndreiCalazans))
 - [Android] Fix `VideoPlayer` constructor throwing `MissingActivity` when the player is created while the `Activity` is briefly unavailable. ([#48914](https://github.com/expo/expo/pull/48914) by [@huextrat](https://github.com/huextrat))
 - [iOS] Fixed a data race on the video cache's open-file registry, which could crash the app while the cache was being trimmed. ([#49286](https://github.com/expo/expo/pull/49286) by [@huextrat](https://github.com/huextrat))
 - [iOS] Fixed a crash when the device runs out of storage while writing to the video cache. `FileHandle.writeData:` raises an uncatchable Objective-C `NSFileHandleOperationException` on `ENOSPC`; the throwing Swift APIs are now used so the error is caught and logged instead. ([#49284](https://github.com/expo/expo/pull/49284) by [@huextrat](https://github.com/huextrat))
